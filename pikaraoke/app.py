@@ -25,6 +25,7 @@ from pikaraoke.routes.controller import controller_bp
 from pikaraoke.routes.files import files_bp
 from pikaraoke.routes.home import home_bp
 from pikaraoke.routes.images import images_bp
+from pikaraoke.routes.import_songs import import_songs_bp
 from pikaraoke.routes.info import info_bp
 from pikaraoke.routes.now_playing import nowplaying_bp
 from pikaraoke.routes.preferences import preferences_bp
@@ -71,6 +72,7 @@ app.register_blueprint(splash_bp)
 app.register_blueprint(controller_bp)
 app.register_blueprint(nowplaying_bp)
 app.register_blueprint(wifi_bp)
+app.register_blueprint(import_songs_bp)
 
 babel.init_app(app)
 socketio.init_app(app)
@@ -201,8 +203,15 @@ def main():
 
     k.upgrade_youtubedl()
 
-    server = WSGIServer(("0.0.0.0", int(args.port)), app, log=None, error_log=logging.getLogger())
-    server.start()
+    if args.debug:
+        # Development Move：Use Flask built-in auto-reload
+        app.run(debug=True, host="0.0.0.0", port=int(args.port), use_reloader=True)
+    else:
+        # Production Mode：Use Gevent WSGIServer
+        server = WSGIServer(
+            ("0.0.0.0", int(args.port)), app, log=None, error_log=logging.getLogger()
+        )
+        server.start()
 
     # Handle sigterm, apparently cherrypy won't shut down without explicit handling
     # signal.signal(signal.SIGTERM, lambda signum, stack_frame: k.stop())

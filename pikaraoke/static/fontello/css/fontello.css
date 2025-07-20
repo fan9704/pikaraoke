@@ -102,3 +102,4 @@
 .icon-folder-open-empty:before { content: '\f115'; } /* '' */
 .icon-search-2:before { content: '\f50d'; } /* '' */
 .icon-wifi:before {content: '📶'; }
+.icon-import:before {content: '⏬'; }

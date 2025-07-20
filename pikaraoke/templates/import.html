@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="section">
+  <div class="box">
+    <h1 class="title">{% trans %}Import Songs{% endtrans %}</h1>
+
+    <form method="post" action="{{ url_for('import_songs.import_youtube_playlist') }}">
+      <div class="field">
+        <label class="label">{% trans %}YouTube Playlist URL{% endtrans %}</label>
+        <div class="control">
+          <input
+            class="input"
+            type="url"
+            name="playlist_url"
+            placeholder="https://www.youtube.com/playlist?list=..."
+            required
+          />
+        </div>
+      </div>
+
+      <input class="playlist-added-by" type="hidden" name="playlist-added-by" />
+
+      <div class="field" style="margin-top: 5px">
+        <label class="checkbox">
+          <input type="checkbox" checked name="queue" />
+          {% trans %}Add to queue once downloaded{% endtrans %}
+        </label>
+      </div>
+
+      <div class="has-text-right" style="margin-top: 5px">
+        <button class="button is-primary" type="submit">
+          {% trans %}Import{% endtrans %}
+        </button>
+      </div>
+    </form>
+
+    <hr />
+
+    <h2 class="title is-4">{% trans %}Import from Chrome Bookmarks{% endtrans %}</h2>
+    <form id="bookmark-upload-form" enctype="multipart/form-data">
+      <div class="field">
+        <label class="label">{% trans %}Upload Chrome Bookmarks HTML File{% endtrans %}</label>
+        <div class="control">
+          <input type="file" id="bookmark-file" name="bookmark_file" accept="text/html" required />
+        </div>
+      </div>
+
+      <div class="field" style="margin-top: 5px">
+        <label class="checkbox">
+          <input type="checkbox" id="bookmark-queue" checked />
+          {% trans %}Add to queue once imported{% endtrans %}
+        </label>
+      </div>
+
+      <div class="has-text-right" style="margin-top: 5px">
+        <button class="button is-primary" type="submit">{% trans %}Upload and Parse{% endtrans %}</button>
+      </div>
+    </form>
+
+    <div id="bookmark-structure" style="margin-top: 20px; display:none;">
+      <h3 class="title is-5">{% trans %}Select Folder to Import{% endtrans %}</h3>
+      <select id="bookmark-folder-select" class="select is-fullwidth"></select>
+      <div class="has-text-right" style="margin-top: 5px">
+        <button id="import-bookmark-folder" class="button is-link">{% trans %}Import Selected Folder{% endtrans %}</button>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const addedBy = getUserCookie();
+    document.querySelector(".playlist-added-by").value = addedBy;
+
+    const bookmarkUploadForm = document.getElementById('bookmark-upload-form');
+    const bookmarkStructureDiv = document.getElementById('bookmark-structure');
+    const bookmarkFolderSelect = document.getElementById('bookmark-folder-select');
+
+    bookmarkUploadForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      const fileInput = document.getElementById('bookmark-file');
+      if (!fileInput.files.length) {
+        alert('Please select a bookmark file to upload.');
+        return;
+      }
+      const formData = new FormData();
+      formData.append('bookmark_file', fileInput.files[0]);
+
+      fetch('{{ url_for("import_songs.bookmark_upload") }}', {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          bookmarkStructureDiv.style.display = 'block';
+          bookmarkFolderSelect.innerHTML = '';
+          function addOptions(bookmarks, prefix = '') {
+            bookmarks.forEach(item => {
+              if (item.type === 'folder') {
+                const option = document.createElement('option');
+                option.value = JSON.stringify(item);
+                option.text = prefix + item.title;
+                bookmarkFolderSelect.appendChild(option);
+                if (item.children) {
+                  addOptions(item.children, prefix + '--');
+                }
+              }
+            });
+          }
+          addOptions(data.bookmarks);
+        } else {
+          alert('Failed to parse bookmarks: ' + data.message);
+        }
+      })
+      .catch(err => {
+        alert('Error uploading bookmark file: ' + err);
+      });
+    });
+
+    document.getElementById('import-bookmark-folder').addEventListener('click', function () {
+      const selectedOption = bookmarkFolderSelect.options[bookmarkFolderSelect.selectedIndex];
+      if (!selectedOption) {
+        alert('Please select a folder to import.');
+        return;
+      }
+      const folderData = JSON.parse(selectedOption.value);
+      const queue = document.getElementById('bookmark-queue').checked;
+      const user = getUserCookie();
+
+      fetch('{{ url_for("import_songs.bookmark_import") }}', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ folder: folderData, queue: queue, user: user })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          alert(data.message);
+        } else {
+          alert('Failed to import bookmarks: ' + data.message);
+        }
+      })
+      .catch(err => {
+        alert('Error importing bookmarks: ' + err);
+      });
+    });
+  });
+</script>
+{% endblock %}

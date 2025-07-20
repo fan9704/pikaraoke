@@ -249,6 +249,7 @@ def parse_pikaraoke_args():
         default=default_config_file_path,
         required=False,
     ),
+    parser.add_argument("--debug", action="store_true", help="Enable debug mode with auto-reload")
 
     args = parser.parse_args()
 

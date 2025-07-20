@@ -1,5 +1,7 @@
+import json
 import logging
 import subprocess
+from pathlib import Path
 
 
 def get_youtubedl_version(youtubedl_path):
@@ -61,8 +63,44 @@ def build_ytdl_download_command(
         if high_quality
         else "mp4"
     )
+    # file_quality = "best"
     cmd = [youtubedl_path, "-f", file_quality, "-o", dl_path]
     if youtubedl_proxy:
         cmd += ["--proxy", youtubedl_proxy]
     cmd += [video_url]
+    return cmd
+
+
+def fetch_playlist_video_ids(playlist_url: str, ytdl_path="yt-dlp", proxy=None):
+    cmd = [ytdl_path, "--flat-playlist", "-J", playlist_url]
+    if proxy:
+        cmd += ["--proxy", proxy]
+    try:
+        result = subprocess.check_output(cmd, stderr=subprocess.STDOUT)
+        info = json.loads(result)
+        return [
+            {
+                "id": entry["id"],
+                "title": entry.get("title", f"Video {entry['id']}"),
+                "url": f"https://www.youtube.com/watch?v={entry['id']}",
+            }
+            for entry in info.get("entries", [])
+        ]
+    except Exception as e:
+        logging.error(f"Failed to fetch playlist: {e}")
+        return []
+
+
+def build_single_video_command(video_id, ytdl_path, download_path, high_quality=False, proxy=None):
+    url = f"https://www.youtube.com/watch?v={video_id}"
+    output_template = str(Path(download_path) / f"%(title)s---{video_id}.%(ext)s")
+    file_quality = (
+        "bestvideo[ext!=webm][height<=1080]+bestaudio[ext!=webm]/best[ext!=webm]"
+        if high_quality
+        else "mp4"
+    )
+    cmd = [ytdl_path, "-f", file_quality, "-o", output_template, "--merge-output-format", "mp4"]
+    if proxy:
+        cmd += ["--proxy", proxy]
+    cmd.append(url)
     return cmd

@@ -32,6 +32,7 @@ from pikaraoke.lib.file_resolver import (
 from pikaraoke.lib.get_platform import get_os_version, get_platform, is_raspberry_pi
 from pikaraoke.lib.youtube_dl import (
     build_ytdl_download_command,
+    fetch_playlist_video_ids,
     get_youtube_id_from_url,
     get_youtubedl_version,
     upgrade_youtubedl,
@@ -392,6 +393,58 @@ class Karaoke:
             # MSG: Message shown after the download process is completed but the song is not found
             self.log_and_send(_("Error downloading song: ") + displayed_title, "danger")
         return rc
+
+    def download_video_playlist(self, playlist_url, enqueue=False, user="Pikaraoke", title=None):
+        self.log_and_send(_("Fetching playlist..."))
+
+        videos = fetch_playlist_video_ids(playlist_url, self.youtubedl_path, self.youtubedl_proxy)
+        if not videos:
+            self.log_and_send(_("Failed to fetch playlist info."), "danger")
+            return 1
+
+        success_count = 0
+
+        for video in videos:
+            video_url = video["url"]
+            video_id = video["id"]
+            video_title = video["title"]
+
+            self.log_and_send(_("Downloading video: %s" % video_title))
+
+            cmd = build_ytdl_download_command(
+                self.youtubedl_path,
+                video_url,
+                self.download_path,
+                self.high_quality,
+                self.youtubedl_proxy,
+            )
+            logging.debug("Youtube-dl command: " + " ".join(cmd))
+            rc = subprocess.call(cmd)
+            if rc != 0:
+                logging.warning(f"Retrying download: {video_url}")
+                rc = subprocess.call(cmd)
+
+            if rc == 0:
+                success_count += 1
+                self.get_available_songs()
+                if enqueue:
+                    s = self.find_song_by_youtube_id(video_id)
+                    if s:
+                        self.enqueue(s, user, log_action=False)
+                        self.log_and_send(_("Downloaded and queued: ") + video_title, "success")
+                    else:
+                        self.log_and_send(
+                            _("Downloaded but not found in song list: ") + video_id, "warning"
+                        )
+                else:
+                    self.log_and_send(_("Downloaded: ") + video_url, "success")
+            else:
+                self.log_and_send(_("Failed to download: ") + video_url, "danger")
+
+        self.log_and_send(
+            _(f"Playlist download complete: {success_count}/{len(videos)} successful"), "info"
+        )
+        return 0 if success_count > 0 else 1
 
     def get_available_songs(self):
         logging.info("Fetching available songs in: " + self.download_path)
