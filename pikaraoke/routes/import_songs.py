@@ -4,7 +4,7 @@ import tempfile
 from flask import Blueprint, request, flash, redirect, url_for, render_template, jsonify
 from flask_babel import gettext as _
 from pikaraoke.lib.current_app import get_karaoke_instance
-from pikaraoke import import_bookmark
+from bookmarks_parser import parse
 
 import_songs_bp = Blueprint("import_songs", __name__)
 
@@ -47,7 +47,7 @@ def bookmark_upload():
     file.save(file_path)
 
     try:
-        bookmarks = import_bookmark.parse(file_path)
+        bookmarks = parse(file_path)
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
     finally:
